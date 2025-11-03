@@ -17,8 +17,7 @@ ACCESS_KEY = Variable.get("access_key")
 SECRET_KEY = Variable.get("secret_key")
 
 LONG_DESCRIPTION = """
-# Описание DAG
-DAG загружает данные о землетрясениях из API
+# DAG загружает данные о землетрясениях из API
 и сохраняет их в S3 (Minio) в формате Parquet.
 
 Для выполнения операций используется ClickHouse и его S3-engine.
@@ -37,6 +36,23 @@ args = {
 
 start_date = '{{ ds }}'
 end_date = '{{ tomorrow_ds }}'
+
+
+SQL_API_TO_S3_QUERY = f'''
+INSERT INTO FUNCTION s3(
+    'http://minio:9000/prod/{LAYER}/{SOURCE}/{start_date}/{start_date}_00-00-00.parquet',
+    '{ACCESS_KEY}',
+    '{SECRET_KEY}',
+    'Parquet' 
+)
+SELECT *
+FROM url('https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime={start_date}&endtime={end_date}', 'CSV');
+'''
+
+s3_settings = {
+    's3_truncate_on_insert': 1,
+    'format_parquet_compression_codec': 'lz4', 
+}
 
 def log_start():
     logging.info(f"✅ Start load for dates: {start_date}/{end_date}")
@@ -62,25 +78,12 @@ with DAG(
     )
 
     get_and_transfer_api_data_to_s3 = ClickHouseOperator(
-        task_id="get_and_transfer_api_data_to_s3",
+        task_id="transfer_api_data_to_s3",
         clickhouse_conn_id="clickhouse_default",
 
-        sql=(
-            f"""
-            INSERT INTO FUNCTION s3(
-                'http://minio:9000/prod/{LAYER}/{SOURCE}/{start_date}/{start_date}_00-00-00.parquet',
-                '{ACCESS_KEY}',
-                '{SECRET_KEY}',
-                'Parquet' 
-            )
-            SELECT *
-            FROM url('https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime={start_date}&endtime={end_date}', 'CSV');
-            """
-        ),
+        sql=SQL_API_TO_S3_QUERY,
 
-        settings={
-            's3_truncate_on_insert': 1,
-        },
+        settings=s3_settings,
 
         on_execute_callback=[log_start],
         on_success_callback=[log_finish],
