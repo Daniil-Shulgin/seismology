@@ -17,14 +17,11 @@ ACCESS_KEY = Variable.get("access_key")
 SECRET_KEY = Variable.get("secret_key")
 
 LONG_DESCRIPTION = """
-# DAG загружает данные о землетрясениях из API
+DAG загружает данные о землетрясениях из API
 и сохраняет их в S3 (Minio) в формате Parquet.
-
-Для выполнения операций используется ClickHouse и его S3-engine.
-Загрузка инициируется через `ClickHouseOperator`.
 """
 
-SHORT_DESCRIPTION = "Загрузка данных о землетрясениях (API -> S3) через ClickHouse"
+SHORT_DESCRIPTION = "API -> S3 через ClickHouse"
 
 args = {
     "owner": OWNER,

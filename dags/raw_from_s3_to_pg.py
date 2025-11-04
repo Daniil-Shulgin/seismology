@@ -6,6 +6,7 @@ from airflow.models import Variable
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 from airflow.sensors.external_task import ExternalTaskSensor
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow_clickhouse_plugin.operators.clickhouse import ClickHouseOperator
 
 # Конфигурация DAG
@@ -19,6 +20,8 @@ SCHEMA = "ods"
 TABLE_NAME = "fct_seismology"
 PASSWORD = Variable.get("pg_password")
 
+PG_CONNECT = "postgres_dwh"
+
 # Параметры MinIO
 ACCESS_KEY = Variable.get("access_key")
 SECRET_KEY = Variable.get("secret_key")
@@ -26,9 +29,10 @@ SECRET_KEY = Variable.get("secret_key")
 LONG_DESCRIPTION = """
 DAG загружает данные о землетрясениях в формате Parquet 
 из S3/MinIO и загружает их в таблицу PostgreSQL DWH.
+Конвертирует типы и стандартизирует названия столбцов.
 """
 
-SHORT_DESCRIPTION = "Загрузка данных о землетрясениях (S3 -> PostgreSQL DWH)"
+SHORT_DESCRIPTION = "S3 -> PostgreSQL DWH"
 
 args = {
     "owner": OWNER,
@@ -40,6 +44,33 @@ args = {
 
 start_date = '{{ ds }}'
 end_date = '{{ tomorrow_ds }}'
+
+CREATE_TABLE_SQL = f"""
+CREATE TABLE IF NOT EXISTS {SCHEMA}.{TABLE_NAME} (
+    "time" DATE,
+    latitude varchar,
+    longitude varchar,
+    depth varchar,
+    mag NUMERIC,
+    mag_type varchar,
+    nst varchar,
+    gap varchar,
+    dmin varchar,
+    rms varchar,
+    net varchar,
+    id varchar,
+    updated varchar,
+    place varchar,
+    type varchar,
+    horizontal_error varchar,
+    depth_error varchar,
+    mag_error varchar,
+    mag_nst varchar,
+    status varchar,
+    location_source varchar,
+    mag_source varchar
+)
+"""
 
 SQL_S3_TO_PG_QUERY=f"""
     INSERT INTO FUNCTION postgresql(
@@ -75,7 +106,7 @@ SQL_S3_TO_PG_QUERY=f"""
         mag_source
     )
     SELECT
-        time,
+        toDate(parseDateTimeBestEffortOrNull(time)) AS time,
         latitude,
         longitude,
         depth,
@@ -137,6 +168,16 @@ with DAG(
         poke_interval=60,
     )
 
+    create_table_in_dwh = SQLExecuteQueryOperator(
+        task_id="create_table_in_dwh",
+        conn_id=PG_CONNECT,
+        autocommit=True,
+        sql=f"""
+        CREATE SCHEMA IF NOT EXISTS {SCHEMA};
+        {CREATE_TABLE_SQL}
+        """,
+    )
+
     get_and_transfer_raw_data_to_ods_pg = ClickHouseOperator(
         task_id="get_and_transfer_raw_data_to_ods_pg",
         clickhouse_conn_id="clickhouse_default",
@@ -151,4 +192,4 @@ with DAG(
         task_id="end",
     )
 
-    start >> sensor_on_raw_layer >> get_and_transfer_raw_data_to_ods_pg >> end
+    start >> sensor_on_raw_layer >> create_table_in_dwh >> get_and_transfer_raw_data_to_ods_pg >> end
