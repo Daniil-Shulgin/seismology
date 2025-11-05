@@ -67,8 +67,8 @@ with DAG(
         CREATE SCHEMA IF NOT EXISTS {SCHEMA};
         CREATE TABLE IF NOT EXISTS {SCHEMA}.{TARGET_TABLE} (
             calculation_date DATE PRIMARY KEY, 
-            total_events_24h INT,
-            strong_events_24h_ge_5_0 INT,
+            total_events_24h NUMERIC NOT NULL,
+            strong_events_24h_ge_5_0 NUMERIC NOT NULL,
             created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
         );
         """,
