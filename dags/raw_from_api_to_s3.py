@@ -25,7 +25,7 @@ SHORT_DESCRIPTION = "API -> S3 через ClickHouse"
 
 args = {
     "owner": OWNER,
-    "start_date": pendulum.datetime(2025,11, 1, tz="Europe/Moscow"),
+    "start_date": pendulum.datetime(2025,10, 1, tz="Europe/Moscow"),
     "catchup": True,
     "retries": 3,
     "retry_delay": pendulum.duration(hours=1),
