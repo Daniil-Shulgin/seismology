@@ -7,7 +7,7 @@ python 3.13.5 -m venv venv
 ```bash
 CREATE_TABLE_SQL = f"""
 CREATE TABLE IF NOT EXISTS {SCHEMA}.{TABLE_NAME} (
-    "time" date,
+    time date,
     latitude float8,
     longitude float8,
     depth float8,
