@@ -4,7 +4,6 @@ import pendulum
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
 from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow_clickhouse_plugin.operators.clickhouse import ClickHouseOperator
