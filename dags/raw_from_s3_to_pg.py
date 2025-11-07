@@ -128,7 +128,7 @@ SQL_S3_TO_PG_QUERY=f"""
         locationSource AS location_source,
         magSource AS mag_source
     FROM s3(
-        'http://minio:9000/prod/{LAYER}/{SOURCE}/{start_date}/{start_date}_00-00-00.parquet',
+        'http://minio:9000/prod/{LAYER}/{SOURCE}/{{{{ ds }}}}/{{{{ ds }}}}_00-00-00.parquet',
         '{ACCESS_KEY}', 
         '{SECRET_KEY}', 
         'Parquet'

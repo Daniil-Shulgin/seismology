@@ -6,22 +6,21 @@ from airflow.sensors.external_task import ExternalTaskSensor
 
 # --- КОНФИГУРАЦИЯ DAG ---
 OWNER = "d.shulgin"
-DAG_ID = "daily_summary"
+DAG_ID = "daily_avg_depth"
 
 # Определения схемы и таблицы
 SCHEMA = "dm"
-TARGET_TABLE = "daily_summary"
+TARGET_TABLE = "daily_avg_depth"
 
 # Имя подключения PostgreSQL (должно совпадать с Airflow Connection ID)
 PG_CONNECT = "postgres_dwh"
 
 LONG_DESCRIPTION = """
-DAG рассчитывает общее количество событий и количество 
-сильных событий >= 5.0 за 1 день и записывает 
+DAG выбирает столбец дата и магнитуда, и записывает 
 их в DM.
 """
 
-SHORT_DESCRIPTION = "Ежедневный подсчет кол-ва событий"
+SHORT_DESCRIPTION = "Фиксация ежедневной магнитуды"
 
 args = {
     "owner": OWNER,
@@ -36,7 +35,7 @@ with DAG(
     dag_id=DAG_ID,
     schedule_interval="0 6 * * *",
     default_args=args,
-    tags=["dm", "daily_summary", "pg", "metrics"],
+    tags=["dm", "daily_avg_depth", "pg"],
     description=SHORT_DESCRIPTION,
     concurrency=1,
     max_active_tasks=1,
@@ -59,44 +58,40 @@ with DAG(
     )
 
     # 2. Создание финальной таблицы, если не существует
-    create_daily_summary = SQLExecuteQueryOperator(
+    create_daily_avg_depth = SQLExecuteQueryOperator(
         task_id="create_table_if_not_exists",
         conn_id=PG_CONNECT,
         autocommit=True,
         sql=f"""
         CREATE SCHEMA IF NOT EXISTS {SCHEMA};
         CREATE TABLE IF NOT EXISTS {SCHEMA}.{TARGET_TABLE} (
-            calculation_date DATE PRIMARY KEY, 
-            total_events_24h NUMERIC NOT NULL,
-            strong_events_24h_ge_5_0 NUMERIC NOT NULL,
-            created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+            activity_date DATE PRIMARY KEY,
+            avg_depth_km FLOAT8
         );
         """,
     )
 
     # 3. Расчет метрик и обработка уже существующих
-    insert_daily_summary = SQLExecuteQueryOperator(
-        task_id="insert_daily_summary",
+    insert_daily_avg_depth = SQLExecuteQueryOperator(
+        task_id="insert_daily_avg_depth",
         conn_id=PG_CONNECT,
         autocommit=True,
         sql=f"""
         INSERT INTO {SCHEMA}.{TARGET_TABLE} (
-            calculation_date, 
-            total_events_24h, 
-            strong_events_24h_ge_5_0
+            activity_date, 
+            avg_depth_km
         )
         SELECT
-            '{{{{ ds }}}}'::DATE - INTERVAL '1 DAY' AS calculation_date,
-            COUNT(id) AS total_events_24h,
-            COUNT(CASE WHEN mag >= 5.0 THEN 1 END) AS strong_events_24h_ge_5_0
+            DATE("time") AS activity_date,
+            AVG(CASE WHEN mag >= 4.0 THEN depth ELSE NULL END) AS avg_depth_km
         FROM
             ods.fct_seismology
         WHERE
-            "time" = ('{{{{ ds }}}}'::DATE - INTERVAL '1 DAY') 
-        ON CONFLICT (calculation_date) DO UPDATE SET
-            total_events_24h = EXCLUDED.total_events_24h,
-            strong_events_24h_ge_5_0 = EXCLUDED.strong_events_24h_ge_5_0,
-            created_at = NOW();
+            DATE("time") = '{{{{ ds }}}}'        
+        GROUP BY
+            1
+        ON CONFLICT (activity_date) DO UPDATE SET
+            avg_depth_km = EXCLUDED.avg_depth_km;
         """,
     )
     
@@ -104,4 +99,4 @@ with DAG(
         task_id="end",
     )
 
-    start >> sensor_on_raw_layer >> create_daily_summary >> insert_daily_summary >> end
+    start >> sensor_on_raw_layer >> create_daily_avg_depth >> insert_daily_avg_depth >> end

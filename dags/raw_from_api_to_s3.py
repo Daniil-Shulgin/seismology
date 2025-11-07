@@ -30,19 +30,19 @@ args = {
     "retry_delay": pendulum.duration(hours=1),
 }
 
-start_date = '{{ ds }}'
-end_date = '{{ tomorrow_ds }}'
+start_date = '{{{{ ds }}}}'
+end_date = '{{{{ tomorrow_ds }}}}'
 
 
 SQL_API_TO_S3_QUERY = f'''
 INSERT INTO FUNCTION s3(
-    'http://minio:9000/prod/{LAYER}/{SOURCE}/{start_date}/{start_date}_00-00-00.parquet',
+    'http://minio:9000/prod/{LAYER}/{SOURCE}/{{{{ ds }}}}/{{{{ ds }}}}_00-00-00.parquet',
     '{ACCESS_KEY}',
     '{SECRET_KEY}',
     'Parquet' 
 )
 SELECT *
-FROM url('https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime={start_date}&endtime={end_date}', 'CSV');
+FROM url('https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime={{{{ ds }}}}&endtime={{{{ tomorrow_ds }}}}', 'CSV');
 '''
 
 s3_settings = {
